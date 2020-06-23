@@ -12,7 +12,7 @@ from spektral.chem import sdf_to_nx
 from spektral.utils import nx_to_numpy
 
 DATA_PATH = os.path.expanduser('~/.deephyper/datasets/qm9/')
-DATASET_URL = 'http://deepchem.io.s3-website-us-west-1.amazonaws.com/datasets/gdb9.tar.gz'
+DATASET_URL = 'https://s3-us-west-1.amazonaws.com/deepchem.io/datasets/molnet_publish/qm9.zip'
 NODE_FEATURES = ['atomic_num', 'charge', 'coords', 'iso']
 EDGE_FEATURES = ['type', 'stereo']
 
@@ -24,12 +24,12 @@ def _download_data():
 
     """
     _ = get_file(
-        'qm9.tar.gz', DATASET_URL,
+        'qm9.zip', DATASET_URL,
         extract=True, cache_dir=DATA_PATH, cache_subdir=DATA_PATH
     )
     os.rename(DATA_PATH + 'gdb9.sdf', DATA_PATH + 'qm9.sdf')
     os.rename(DATA_PATH + 'gdb9.sdf.csv', DATA_PATH + 'qm9.sdf.csv')
-    os.remove(DATA_PATH + 'qm9.tar.gz')
+    os.remove(DATA_PATH + 'qm9.zip')
 
 
 def load_data(nf_keys=None, ef_keys=None, amount=None):
