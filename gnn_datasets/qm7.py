@@ -19,15 +19,18 @@ def adjacency_list_to_array(adjacency_list):
     return adjacency_array
 
 
-
-def load_data(zero_padding=True):
+def load_data(zero_padding=True, split='stratified'):
     """
     Load qm7 dataset from .mat file. Max atom 23.
     Check details here: http://quantum-machine.org/datasets/
+    Args:
+        zero_padding: bool, by default True.
+        split: str, {'index', 'random', 'stratified', None}
     Returns:
         Lists of train, valid and test data.
     """
-    qm7_tasks, (train_dataset, valid_dataset, test_dataset), transformers = load_qm7_from_mat(featurizer='GraphConv')
+    qm7_tasks, (train_dataset, valid_dataset, test_dataset), transformers = load_qm7_from_mat(featurizer='GraphConv',
+                                                                                              split=split)
     MAX_ATOM = 23
     N_FEAT = 75
     X_train, X_valid, X_test = [], [], []
