@@ -1,101 +1,110 @@
-"""
-Author: Shengli Jiang
-Email: sjiang87@wisc.edu / shengli.jiang@anl.gov
-Adapted from Spektral tf1
-https://github.com/danielegrattarola/spektral/tree/tf1
-"""
-
-import os
-from tensorflow.keras.utils import get_file
-from spektral.utils.io import load_csv, load_sdf
-from spektral.chem import sdf_to_nx
-from spektral.utils import nx_to_numpy
-
-DATA_PATH = os.path.expanduser('~/.deephyper/datasets/qm9/')
-DATASET_URL = 'https://s3-us-west-1.amazonaws.com/deepchem.io/datasets/molnet_publish/qm9.zip'
-NODE_FEATURES = ['atomic_num', 'charge', 'coords', 'iso']
-EDGE_FEATURES = ['type', 'stereo']
+import numpy as np
+from deepchem.molnet import load_qm9
 
 
-def _download_data():
+def adjacency_list_to_array(adjacency_list):
     """
-    Load qm9 dataset
-    Returns:
-
-    """
-    _ = get_file(
-        'qm9.zip', DATASET_URL,
-        extract=True, cache_dir=DATA_PATH, cache_subdir=DATA_PATH
-    )
-    os.rename(DATA_PATH + 'gdb9.sdf', DATA_PATH + 'qm9.sdf')
-    os.rename(DATA_PATH + 'gdb9.sdf.csv', DATA_PATH + 'qm9.sdf.csv')
-    os.remove(DATA_PATH + 'qm9.zip')
-
-
-def load_data(nf_keys=None, ef_keys=None, amount=None):
-    """
-    Loads the QM9 chemical data set of small molecules.
-
-    Nodes represent heavy atoms (hydrogens are discarded), edges represent
-    chemical bonds.
-
-    The node features represent the chemical properties of each atom, and are
-    loaded according to the `nf_keys` argument.
-    See `deephyper.datasets.gnndataset.qm9.NODE_FEATURES` for possible node features, and
-    see [this link](http://www.nonlinear.com/progenesis/sdf-studio/v0.9/faq/sdf-file-format-guidance.aspx)
-    for the meaning of each property. Usually, it is sufficient to load the
-    atomic number.
-
-    The edge features represent the type and stereoscopy of each chemical bond
-    between two atoms.
-    See `deephyper.datasets.genn_datasets.qm9.EDGE_FEATURES` for possible edge features, and
-    see [this link](http://www.nonlinear.com/progenesis/sdf-studio/v0.9/faq/sdf-file-format-guidance.aspx)
-    for the meaning of each property. Usually, it is sufficient to load the
-    type of bond.
+    Function to convert adjacency list to array
     Args:
-        nf_keys: list or str, node node features to return (see `qm9.NODE_FEATURES` for available features);
-        ef_keys: list or str, edge features to return (see `qm9.EDGE_FEATURES` for available features);
-        amount: the amount of molecules to return (in ascending order by number of atoms);
+        adjacency_list: list containing atom's connection
 
     Returns:
-        the adjacency matrix, node features, edge features, and a Pandas dataframe containing labels;
+        Adjacency array
     """
-    if not os.path.exists(DATA_PATH):
-        _download_data()    # Try to download dataset
-    print('Loading QM9 dataset.')
-
-    sdf_file = os.path.join(DATA_PATH, 'qm9.sdf')
-    data = load_sdf(sdf_file, amount=amount)  # Internal SDF format
-
-    # Load labels
-    labels_file = os.path.join(DATA_PATH, 'qm9.sdf.csv')
-    labels = load_csv(labels_file)
-    if amount is not None:
-        labels = labels[:amount]
-    # Convert to Networkx
-    data = [sdf_to_nx(_) for _ in data]
-    if nf_keys is not None:
-        if isinstance(nf_keys, str):
-            nf_keys = [nf_keys]
-    else:
-        nf_keys = NODE_FEATURES
-    if ef_keys is not None:
-        if isinstance(ef_keys, str):
-            ef_keys = [ef_keys]
-    else:
-        ef_keys = EDGE_FEATURES
-
-    adj, nf, ef = nx_to_numpy(data,
-                              auto_pad=True, self_loops=True,
-                              nf_keys=nf_keys, ef_keys=ef_keys)
-    return adj, nf, ef, labels
+    max_size = len(adjacency_list)
+    adjacency_array = np.zeros(shape=(max_size, max_size))
+    for i in range(max_size):
+        adjacency_array[i, adjacency_list[i]] = 1
+        adjacency_array[i, i] = 1
+    return adjacency_array
 
 
-def test_download_data():
-    _download_data()
+def load_data(zero_padding=True, split='stratified'):
+    """
+    Load qm9 dataset from .mat file. Max atom 23.
+    Check details here: http://quantum-machine.org/datasets/
+    Args:
+        zero_padding: bool, by default True. Padding node feature array X to (MAX_ATOM, N_FEAT), adjacency array A to
+        (MAX_ATOM, MAX_ATOM);
+        split: str, {'index', 'random', 'stratified', None};
+    Returns:
+        Lists of train, valid and test data, and 12 qm9 tasks.
+    """
+    print("Loading QM9 Dataset (takes about 1 minute)...")
+    qm9_tasks, (train_dataset, valid_dataset, test_dataset), transformers = load_qm9(featurizer='GraphConv',
+                                                                                     split=split)
+    MAX_ATOM = 9
+    N_FEAT = 75
+    X_train, X_valid, X_test = [], [], []
+    A_train, A_valid, A_test = [], [], []
+    E_train, E_valid, E_test = [], [], []
+    y_train, y_valid, y_test = [], [], []
+    train_x = train_dataset.X
+    train_y = train_dataset.y
+    valid_x = valid_dataset.X
+    valid_y = valid_dataset.y
+    test_x = test_dataset.X
+    test_y = test_dataset.y
+
+    # TRAINING DATASET
+    for i in range(len(train_dataset)):
+        atom_features = train_x[i].atom_features
+        adjacency_list = train_x[i].get_adjacency_list()
+        adjacency_array = adjacency_list_to_array(adjacency_list)
+
+        if zero_padding:
+            atom_features_zero_padding = np.zeros(shape=(MAX_ATOM, N_FEAT))
+            atom_features_zero_padding[:atom_features.shape[0], :atom_features.shape[1]] = atom_features
+            adjacency_array_zero_padding = np.zeros(shape=(MAX_ATOM, MAX_ATOM))
+            adjacency_array_zero_padding[:adjacency_array.shape[0], :adjacency_array.shape[1]] = adjacency_array
+            X_train.append(atom_features_zero_padding)
+            A_train.append(adjacency_array_zero_padding)
+        else:
+            X_train.append(atom_features)
+            A_train.append(adjacency_array)
+        y_train.append(train_y[i])
+
+    # VALIDATION DATASET
+    for i in range(len(valid_dataset)):
+        atom_features = valid_x[i].atom_features
+        adjacency_list = valid_x[i].get_adjacency_list()
+        adjacency_array = adjacency_list_to_array(adjacency_list)
+
+        if zero_padding:
+            atom_features_zero_padding = np.zeros(shape=(MAX_ATOM, N_FEAT))
+            atom_features_zero_padding[:atom_features.shape[0], :atom_features.shape[1]] = atom_features
+            adjacency_array_zero_padding = np.zeros(shape=(MAX_ATOM, MAX_ATOM))
+            adjacency_array_zero_padding[:adjacency_array.shape[0], :adjacency_array.shape[1]] = adjacency_array
+            X_valid.append(atom_features_zero_padding)
+            A_valid.append(adjacency_array_zero_padding)
+        else:
+            X_valid.append(atom_features)
+            A_valid.append(adjacency_array)
+        y_valid.append(valid_y[i])
+
+    # TESTING DATASET
+    for i in range(len(test_dataset)):
+        atom_features = test_x[i].atom_features
+        adjacency_list = test_x[i].get_adjacency_list()
+        adjacency_array = adjacency_list_to_array(adjacency_list)
+
+        if zero_padding:
+            atom_features_zero_padding = np.zeros(shape=(MAX_ATOM, N_FEAT))
+            atom_features_zero_padding[:atom_features.shape[0], :atom_features.shape[1]] = atom_features
+            adjacency_array_zero_padding = np.zeros(shape=(MAX_ATOM, MAX_ATOM))
+            adjacency_array_zero_padding[:adjacency_array.shape[0], :adjacency_array.shape[1]] = adjacency_array
+            X_test.append(atom_features_zero_padding)
+            A_test.append(adjacency_array_zero_padding)
+        else:
+            X_test.append(atom_features)
+            A_test.append(adjacency_array)
+        y_test.append(test_y[i])
+
+    return [X_train, A_train, E_train, y_train], \
+           [X_valid, A_valid, E_valid, y_valid], \
+           [X_test, A_test, E_test, y_test], \
+           qm9_tasks
 
 
-if __name__ == "__main__":
-    adj, nf, ef, labels = load_data(nf_keys=['atomic_num', 'charge', 'coords', 'iso'],
-                                    ef_keys=['type', 'stereo'],
-                                    amount=1000)
+if __name__ == '__main__':
+    train_data, valid_data, test_data, qm9_tasks = load_data()

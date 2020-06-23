@@ -24,11 +24,13 @@ def load_data(zero_padding=True, split='stratified'):
     Load qm7 dataset from .mat file. Max atom 23.
     Check details here: http://quantum-machine.org/datasets/
     Args:
-        zero_padding: bool, by default True.
-        split: str, {'index', 'random', 'stratified', None}
+        zero_padding: bool, by default True. Padding node feature array X to (MAX_ATOM, N_FEAT), adjacency array A to
+        (MAX_ATOM, MAX_ATOM);
+        split: str, {'index', 'random', 'stratified', None};
     Returns:
-        Lists of train, valid and test data.
+        Lists of train, valid and test data, and qm7 task name.
     """
+    print("Loading QM7 Dataset (takes about 1 minute)...")
     qm7_tasks, (train_dataset, valid_dataset, test_dataset), transformers = load_qm7_from_mat(featurizer='GraphConv',
                                                                                               split=split)
     MAX_ATOM = 23
@@ -43,6 +45,8 @@ def load_data(zero_padding=True, split='stratified'):
     valid_y = valid_dataset.y
     test_x = test_dataset.X
     test_y = test_dataset.y
+
+    # TRAINING DATASET
     for i in range(len(train_dataset)):
         atom_features = train_x[i].atom_features
         adjacency_list = train_x[i].get_adjacency_list()
@@ -60,6 +64,7 @@ def load_data(zero_padding=True, split='stratified'):
             A_train.append(adjacency_array)
         y_train.append(train_y[i])
 
+    # VALIDATION DATASET
     for i in range(len(valid_dataset)):
         atom_features = valid_x[i].atom_features
         adjacency_list = valid_x[i].get_adjacency_list()
@@ -77,6 +82,7 @@ def load_data(zero_padding=True, split='stratified'):
             A_valid.append(adjacency_array)
         y_valid.append(valid_y[i])
 
+    # TESTING DATASET
     for i in range(len(test_dataset)):
         atom_features = test_x[i].atom_features
         adjacency_list = test_x[i].get_adjacency_list()
@@ -96,8 +102,9 @@ def load_data(zero_padding=True, split='stratified'):
 
     return [X_train, A_train, E_train, y_train], \
            [X_valid, A_valid, E_valid, y_valid], \
-           [X_test, A_test, E_test, y_test]
+           [X_test, A_test, E_test, y_test], \
+           qm7_tasks
 
 
 if __name__ == '__main__':
-    train_data, valid_data, test_data = load_data()
+    train_data, valid_data, test_data, qm7_tasks = load_data()
